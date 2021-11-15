@@ -1,0 +1,10 @@
+*.log
+.idea/
+.idea/workspace.xml
+target/
+dependency-reduced-pom.xml
+tellstick.conf
+lighter.log.*
+nohup.out
+start-lighter.sh
+lighter.sh
