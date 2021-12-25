@@ -5,7 +5,7 @@ from time import sleep, strftime
 import calendar
 import os 
 import sys, getopt 
-
+import subprocess
 from worker import RepeatedTimer
 from ctypes import util
 from ctypes import *
@@ -15,12 +15,6 @@ def main():
     print("Python print hello")
     print("Current weekday = " + date.today().strftime('%A'))
     print("Current time : " + datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
-    
-    isOk = os_info()
-
-    if not isOk :
-        print("Wrong OS")
-        exit(3)
 
     library = None
     libname = loadlibrary(library)
@@ -29,7 +23,7 @@ def main():
         print("Error cannot find library! Telldus-core must be installed.")
         exit(3)
     else:
-        print("Library Loaded.")
+        print("Library Loaded, appication Ok.")
     
 
 def loadlibrary(libraryname=None):
@@ -79,35 +73,55 @@ def runTimer(name):
 
 def read_db(database_file):
     # print(os.path.abspath(database_file))
-    read_device(1)
+    # read_device(1)
     if not os.path.exists(database_file):
         print("Database file did not exist! => " + database_file)
         return
     else:
-        print("Reading at time : " + datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+        # print("Reading at time : " + datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
         sql = "SELECT d.DeviceId, Timepoint, Action, DeviceName, LastCommand FROM Device d inner join Schema c ON d.deviceId = c.deviceId"
         conn = sqlite3.connect(database_file)
         cur = conn.cursor()
         cur.execute(sql)
         current_devices = cur.fetchall()
         for row in current_devices:
-            now = datetime.now()
-            h, m = map(int, row[1].split(':'))
-            if (row[2] == "on"):
-                if h == now.hour and m == now.minute:
-                    print("DeviceId ", row[0], "Is On at ", row[1])
+            now = datetime.now()                                
+            date_time_obj = datetime.strptime(row[1], '%H:%M')
+            hDiff = date_time_obj.hour - now.hour
+            mDiff = date_time_obj.minute - now.minute
+
+            if (hDiff == 0 and mDiff == 0):
+                if row[2] == "on":
+                    read_device(row[0])
                     send_command("on", database_file, row[0])
+                if row[2] == "off":
+                    read_device(row[0])
+                    send_command("off", database_file, row[0])
+                
+
         conn.close()
     
 
 def send_command(last_command, db, id):
-    print("Sending command", last_command)
+    print("Sending command {}".format(last_command))
     
+    cmd = ""
+    if last_command == "on":
+        cmd = "tdtool -n " + str(id)
+    else:
+        cmd = "tdtool -f " + str(id)
+    
+    print(cmd)
+
+    os.system(cmd)
+
     conn = sqlite3.connect(db)
-    sql = "UPDATE Device SET LastTimePoint = ?, LastCommand = ?, WHERE DeviceId = ?", (datetime.now(), last_command, id)
+    # sql = "UPDATE Device SET LastTimePoint = ?, LastCommand = ?, WHERE DeviceId = ?";
+    sql = "UPDATE Device SET LastCommand = ?, LastTimePoint=? WHERE DeviceId = ?"
     cur = conn.cursor()
     
-    cur.execute(sql)
+    # cur.execute(sql,  (datetime.now(), last_command, id))
+    cur.execute(sql,  (last_command, datetime.now(), id))
     conn.commit()
 
 def os_info():
@@ -116,13 +130,14 @@ def os_info():
 
 if __name__ == '__main__':
     main()
+    # read_db("db/config.db")
     # rt = RepeatedTimer(1, runTimer, "World")
     # try:
         # sleep(5)
     # finally:
         # rt.stop()
-    
-    rt = RepeatedTimer(1, read_db, "db/config.db")
+
+    t = RepeatedTimer(10, read_db, "db/config.db")
 
     # read_device(1)
     # read_db()
